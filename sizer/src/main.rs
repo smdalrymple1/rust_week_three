@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use clap::Parser;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 
 #[derive(Parser, Debug)]
@@ -16,7 +18,11 @@ struct Args {
     in_unit: String,
 }
 
-#[derive(Debug,Clone)]
+
+//I'm skeptical of this design
+//Adding a new unit requieres updating 4 locations.
+//It looks "robust" and crap, but it just feels scattered
+#[derive(Debug,Clone,EnumIter)]
 enum FileUnit {
     Byte,
     KiloByte,
@@ -68,31 +74,17 @@ impl FileSize {
         self.unit.get_divisor()
     }
 
+    fn convert(&self, file_unit: FileUnit) -> FileSize {
+        FileSize {
+            size: self.to_bytes().size / file_unit.get_divisor(),
+            unit: file_unit
+        }
+    }
+
     fn to_bytes(&self) -> FileSize {
         FileSize {
             size: self.size * self.get_divisor(),
             unit: FileUnit::Byte
-        }
-    }
-
-    fn to_kilobytes(&self) -> FileSize {
-        FileSize {
-           size: self.to_bytes().size / FileUnit::KiloByte.get_divisor(),
-           unit: FileUnit::KiloByte
-        }
-    }
-
-    fn to_megabytes(&self) -> FileSize {
-        FileSize {
-            size: self.to_bytes().size / FileUnit::MegaByte.get_divisor(),
-            unit: FileUnit::MegaByte
-        }
-    }
-
-    fn to_gigabytes(&self) -> FileSize {
-        FileSize {
-            size: self.to_bytes().size / FileUnit::GigaByte.get_divisor(),
-            unit: FileUnit::GigaByte
         }
     }
 
@@ -104,14 +96,9 @@ impl FileSize {
 fn main() {
 
     //TODO Make Static?
-    //TODO Still feel Boileplateish. 
-    //It feels wayyy to verbose for me to be using this language correctly
-    let types: HashMap<String, FileUnit> = HashMap::from([
-        (String::from(FileUnit::Byte.get_short_name()), FileUnit::Byte),
-        (String::from(FileUnit::KiloByte.get_short_name()), FileUnit::KiloByte),
-        (String::from(FileUnit::MegaByte.get_short_name()), FileUnit::MegaByte),
-        (String::from(FileUnit::GigaByte.get_short_name()), FileUnit::GigaByte)
-    ]);
+    let types: HashMap<String, FileUnit> = HashMap::from_iter(
+        FileUnit::iter().map(|file_unit| (String::from(file_unit.get_short_name()), file_unit))
+    );
 
     let args = Args::parse();
     if let Some(unit) = types.get(&args.in_unit.to_uppercase()) {
@@ -119,13 +106,13 @@ fn main() {
             size: args.in_size,
             unit: unit.clone()
         };
+
+        let sizes: HashMap<String, String> = HashMap::from_iter(
+            FileUnit::iter().map(|file_unit| (format!("{}s", file_unit.get_long_name()), file_size.convert(file_unit).to_string()))
+        );
+
         //A better design would be able to fold this into a for loop
-        println!("Sizes {:?}", HashMap::from([
-            (format!("{}s", FileUnit::Byte.get_long_name()), file_size.to_bytes().to_string()),
-            (format!("{}s", FileUnit::KiloByte.get_long_name()), file_size.to_kilobytes().to_string()),
-            (format!("{}s", FileUnit::MegaByte.get_long_name()), file_size.to_megabytes().to_string()),
-            (format!("{}s", FileUnit::GigaByte.get_long_name()), file_size.to_gigabytes().to_string())
-        ]));
+        println!("Sizes {:?}", sizes);
     } else {
         println!("{} is not a known file size unit", args.in_unit)
     }
